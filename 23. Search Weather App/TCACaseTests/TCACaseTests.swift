@@ -6,31 +6,145 @@
 //
 
 import XCTest
+import ComposableArchitecture
 @testable import TCACase
+
+struct MockError: Error { }
+
+extension MockError: LocalizedError {
+    var errorDescription: String? {
+        return "error"
+    }
+}
 
 final class TCACaseTests: XCTestCase {
 
-    override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-    }
+    @MainActor
+    func test_text입력() async {
+        let store = TestStore(initialState: SearchFeature.State()) {
+            SearchFeature()
+        }
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-    }
-
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        self.measure {
-            // Put the code you want to measure the time of here.
+        await store.send(.searchQueryChange("Seoul")) {
+            $0.searchQuery = "Seoul"
         }
     }
 
+    @MainActor
+    func test_비어있는text_검색() async {
+        let store = TestStore(initialState: SearchFeature.State()) {
+            SearchFeature()
+        }
+
+        await store.send(.search) {
+            $0.alertState = AlertState { TextState("Please enter") }
+        }
+    }
+
+    @MainActor
+    func test_검색_성공() async {
+        let store = TestStore(initialState: SearchFeature.State()) {
+            SearchFeature()
+        } withDependencies: {
+            $0.weatherClient.citySearch = { @Sendable _ in .mock }
+        }
+
+        await store.send(.searchQueryChange("Seoul")) {
+            $0.searchQuery = "Seoul"
+        }
+
+        await store.send(.search) {
+            $0.isLoading = true
+        }
+
+        await store.receive(\.searchResponse) {
+            $0.isLoading = false
+            $0.detailFeatureState = IdentifiedArrayOf(
+                uniqueElements: CitySearchModel.mock.results.map {
+                    WeatherDetailFeature.State(cityModel: $0, id: $0.id)
+                }
+            )
+        }
+    }
+
+    @MainActor
+    func test_검색_실패() async {
+        let store = TestStore(initialState: SearchFeature.State()) {
+            SearchFeature()
+        } withDependencies: {
+            $0.weatherClient.citySearch = { @Sendable _ in throw MockError() }
+        }
+
+        await store.send(.searchQueryChange("Seoul")) {
+            $0.searchQuery = "Seoul"
+        }
+
+        await store.send(.search) {
+            $0.isLoading = true
+        }
+
+        await store.receive(\.searchResponse) {
+            $0.isLoading = false
+            $0.detailFeatureState = []
+            $0.alertState = AlertState { TextState("\(MockError().localizedDescription)") }
+        }
+    }
+
+    @MainActor
+    func test_날씨_데이터_응답_성공() async {
+        let store = TestStore(
+            initialState: WeatherDetailFeature.State(
+                cityModel: CitySearchModel.mock.results.first!,
+                id: 1
+            )
+        ) {
+            WeatherDetailFeature()
+        } withDependencies: {
+            $0.weatherClient.getWeatherData = { @Sendable _ in .mock }
+        }
+
+        await store.send(.getWeatherData)
+        await store.receive(\.weatherResponse) {
+            $0.isLoading = false
+            $0.weatherModel = WeatherModel.mock
+        }
+    }
+
+    @MainActor
+    func test_날씨_데이터_응답_실패() async {
+        let store = TestStore(
+            initialState: WeatherDetailFeature.State(
+                cityModel: CitySearchModel.mock.results.first!,
+                id: 1
+            )
+        ) {
+            WeatherDetailFeature()
+        } withDependencies: {
+            $0.weatherClient.getWeatherData = { @Sendable _ in throw MockError() }
+        }
+
+        await store.send(.getWeatherData)
+        await store.receive(\.weatherResponse) {
+            $0.isLoading = false
+            $0.alertState = AlertState { TextState(MockError().localizedDescription) }
+        }
+    }
+
+    @MainActor
+    func test_날씨_데이터_응답_실패_화면닫힘() async {
+        let store = TestStore(
+            initialState: WeatherDetailFeature.State(
+                alertState: AlertState { TextState(MockError().localizedDescription) },
+                cityModel: CitySearchModel.mock.results.first!,
+                id: 1
+            )
+        ) {
+            WeatherDetailFeature()
+        }
+
+        await store.send(.alertAction(.dismiss)) {
+            $0.alertState = nil
+            $0.dismiss = true
+        }
+    }
 }

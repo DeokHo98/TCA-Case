@@ -11,12 +11,13 @@ import ComposableArchitecture
 @Reducer
 struct WeatherDetailFeature {
     @ObservableState
-    struct State: Equatable {
+    struct State: Equatable, Identifiable {
         @Presents var alertState: AlertState<Action.Alert>?
         let cityModel: CitySearchModel.Result
         var weatherModel: WeatherModel?
         var isLoading = true
         var dismiss = false
+        var id: Int
     }
 
     enum Action {
@@ -32,7 +33,7 @@ struct WeatherDetailFeature {
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
-            case .alertAction:
+            case .alertAction(.dismiss):
                 state.dismiss = true
                 return .none
             case .getWeatherData:

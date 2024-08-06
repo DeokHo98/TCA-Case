@@ -14,8 +14,9 @@ struct SearchFeature {
     struct State: Equatable {
         @Presents var alertState: AlertState<Action.Alert>?
         var isLoading: Bool = false
-        var cityList: [CitySearchModel.Result] = []
         var searchQuery = ""
+        var detailFeatureState: IdentifiedArrayOf<WeatherDetailFeature.State> = []
+
     }
 
     enum Action {
@@ -23,7 +24,8 @@ struct SearchFeature {
         case search
         case searchQueryChange(String)
         case searchResponse(Result<CitySearchModel, Error>)
-        
+        case detailFeatureAction(IdentifiedAction<WeatherDetailFeature.State.ID, WeatherDetailFeature.Action>)
+
         enum Alert: Equatable { }
     }
 
@@ -59,15 +61,25 @@ struct SearchFeature {
                 return .none
             case .searchResponse(.failure(let error)):
                 state.isLoading = false
-                state.cityList = []
+                state.detailFeatureState = []
                 state.alertState = AlertState { TextState("\(error.localizedDescription)") }
                 return .none
             case .searchResponse(.success(let model)):
                 state.isLoading = false
-                state.cityList = model.results
+                state.detailFeatureState = IdentifiedArrayOf(
+                    uniqueElements: model.results.map {
+                        WeatherDetailFeature.State(cityModel: $0, id: $0.id)
+                    }
+                )
+                return .none
+            case .detailFeatureAction(.element(let id, let action)):
+                // Detail화면에서 액션을 받고싶으면 여기서 처리
                 return .none
             }
         }
         .ifLet(\.alertState, action: \.alertAction)
+        .forEach(\.detailFeatureState, action: \.detailFeatureAction) {
+            WeatherDetailFeature()
+        }
     }
 }

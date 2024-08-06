@@ -31,7 +31,7 @@ extension CitySearchModel {
                 name: "브루클린"
             ),
             Result(
-                id: 1,
+                id:2,
                 country: "한국",
                 latitude: 42.6782,
                 longitude: -70.9442,

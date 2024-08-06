@@ -34,19 +34,13 @@ struct SearchView: View {
                     .padding()
 
                     List {
-                        ForEach(store.cityList) { model in
+                        ForEach(store.scope(state: \.detailFeatureState, action: \.detailFeatureAction)) { store in
                             NavigationLink(
                                 destination: WeatherDetailView(
-                                    store: StoreOf<WeatherDetailFeature>(
-                                        initialState: WeatherDetailFeature.State(cityModel: model),
-                                        reducer: {
-                                            WeatherDetailFeature()
-                                                ._printChanges()
-                                        }
-                                    )
+                                    store: store
                                 )
                             ) {
-                                Text(model.name)
+                                Text(store.cityModel.name)
                             }
                         }
                     }
@@ -63,6 +57,5 @@ struct SearchView: View {
             .navigationTitle("City Search")
         }
         .alert($store.scope(state: \.alertState, action: \.alertAction))
-
     }
 }
